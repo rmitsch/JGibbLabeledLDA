@@ -1,11 +1,11 @@
 /*
  * Copyright (C) 2007 by
- * 
+ *
  * 	Xuan-Hieu Phan
  *	hieuxuan@ecei.tohoku.ac.jp or pxhieu@gmail.com
  * 	Graduate School of Information Sciences
  * 	Tohoku University
- * 
+ *
  *  Cam-Tu Nguyen
  *  ncamtu@gmail.com
  *  College of Technology
@@ -44,17 +44,17 @@ public class LDADataset {
     // Instance Variables
     //---------------------------------------------------------------
 
-    public Dictionary localDict = new Dictionary();			// local dictionary	
-    public ArrayList<Document> docs = new ArrayList<Document>(); 		// a list of documents	
+    public Dictionary localDict = new Dictionary();			// local dictionary
+    public ArrayList<Document> docs = new ArrayList<Document>(); 		// a list of documents
     public int M = 0; 			 		// number of documents
     public int V = 0;			 		// number of words
 
-    // map from local coordinates (id) to global ones 
+    // map from local coordinates (id) to global ones
     // null if the global dictionary is not set
-    public TIntIntHashMap lid2gid = null; 
+    public TIntIntHashMap lid2gid = null;
 
     //link to a global dictionary (optional), null for train data, not null for test data
-    public Dictionary globalDict = null;	 		
+    public Dictionary globalDict = null;
 
     //-------------------------------------------------------------
     //Public Instance Methods
@@ -74,7 +74,7 @@ public class LDADataset {
      * set the document at the index idx if idx is greater than 0 and less than M
      * @param doc document to be set
      * @param idx index in the document array
-     */	
+     */
     public void setDoc(Document doc, int idx){
         if (idx < docs.size()) {
             docs.set(idx, doc);
@@ -101,6 +101,7 @@ public class LDADataset {
             // parse labels (unless we're ignoring the labels)
             if (!unlabeled) {
                 // store labels in a HashSet to ensure uniqueness
+
                 TIntHashSet label_set = new TIntHashSet();
                 for (String labelStr : labelStrs) {
                     try {
@@ -123,11 +124,11 @@ public class LDADataset {
 
             int _id = localDict.word2id.size();
 
-            if (localDict.contains(word))		
+            if (localDict.contains(word))
                 _id = localDict.getID(word);
 
             if (globalDict != null) {
-                //get the global id					
+                //get the global id
                 if (globalDict.contains(word)) {
                     localDict.addWord(word);
 
@@ -161,7 +162,9 @@ public class LDADataset {
                         new FileInputStream(filename)), "UTF-8"));
         try {
             String line;
+            // Here: Get all documents from database, iterate over them. Add int. representation of labels before start of document.
             while ((line = reader.readLine()) != null) {
+            	// Here
                 addDoc(line, unlabeled);
             }
             setM(docs.size());
@@ -176,4 +179,31 @@ public class LDADataset {
             reader.close();
         }
     }
+
+    /**
+     * read a dataset from TAPAS database
+     * @return true if success and false otherwise
+     */
+//    public boolean readDataSet(boolean unlabeled) throws FileNotFoundException, IOException
+//    {
+//        BufferedReader reader = new BufferedReader(new InputStreamReader(
+//                    new GZIPInputStream(
+//                        new FileInputStream(filename)), "UTF-8"));
+//        try {
+//            String line;
+//            while ((line = reader.readLine()) != null) {
+//                addDoc(line, unlabeled);
+//            }
+//            setM(docs.size());
+//
+//            // debug output
+//            System.out.println("Dataset loaded:");
+//            System.out.println("\tM:" + M);
+//            System.out.println("\tV:" + V);
+//
+//            return true;
+//        } finally {
+//            reader.close();
+//        }
+//    }
 }

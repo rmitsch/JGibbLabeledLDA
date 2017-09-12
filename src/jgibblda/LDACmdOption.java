@@ -48,4 +48,22 @@ public class LDACmdOption {
 
     @Option(name="-twords", usage="Specify the number of most likely words to be printed for each topic")
         public int twords = 100;
+
+    @Option(name="-db_host", usage="Specify the database host")
+    	public String db_host = "";
+
+    @Option(name="-db_port", usage="Specify the database port")
+		public String db_port = "";
+
+    @Option(name="-db_database", usage="Specify the database")
+		public String db_database = "";
+
+    @Option(name="-db_user", usage="Specify the database user")
+		public String db_user = "";
+
+    @Option(name="-db_password", usage="Specify the database password")
+		public String db_password = "";
+
+    @Option(name="-db_topic_model_id", usage="Specify the database ID of topic model")
+		public String db_topic_model_id = "";
 }

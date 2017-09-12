@@ -1,11 +1,11 @@
 /*
  * Copyright (C) 2007 by
- * 
+ *
  * 	Xuan-Hieu Phan
  *	hieuxuan@ecei.tohoku.ac.jp or pxhieu@gmail.com
  * 	Graduate School of Information Sciences
  * 	Tohoku University
- * 
+ *
  *  Cam-Tu Nguyen
  *  ncamtu@gmail.com
  *  College of Technology
@@ -31,17 +31,21 @@ package jgibblda;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
+import tapas.DatabaseConnector;
+
 public class Estimator
 {
     // output model
     protected Model trnModel;
     LDACmdOption option;
+    private DatabaseConnector dbConnector;
 
-    public Estimator(LDACmdOption option) throws FileNotFoundException, IOException
+    public Estimator(LDACmdOption option, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
     {
         this.option = option;
+        this.dbConnector = dbConnector;
 
-        trnModel = new Model(option);
+        trnModel = new Model(option, dbConnector);
 
         if (option.est){
             trnModel.init(true);
@@ -59,7 +63,7 @@ public class Estimator
             System.out.format("%6d", trnModel.liter);
 
             // for all z_i
-            for (int m = 0; m < trnModel.M; m++){				
+            for (int m = 0; m < trnModel.M; m++){
                 for (int n = 0; n < trnModel.data.docs.get(m).length; n++){
                     // z_i = z[m][n]
                     // sample from p(z_i|z_-i, w)

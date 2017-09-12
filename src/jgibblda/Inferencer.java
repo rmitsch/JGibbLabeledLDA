@@ -1,11 +1,11 @@
 /*
  * Copyright (C) 2007 by
- * 
+ *
  * 	Xuan-Hieu Phan
  *	hieuxuan@ecei.tohoku.ac.jp or pxhieu@gmail.com
  * 	Graduate School of Information Sciences
  * 	Tohoku University
- * 
+ *
  *  Cam-Tu Nguyen
  *  ncamtu@gmail.com
  *  College of Technology
@@ -31,6 +31,8 @@ package jgibblda;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
+import tapas.DatabaseConnector;
+
 public class Inferencer
 {
     // Train model
@@ -40,14 +42,17 @@ public class Inferencer
 
     private Model newModel;
 
+    private DatabaseConnector dbConnector;
+
     //-----------------------------------------------------
     // Init method
     //-----------------------------------------------------
-    public Inferencer(LDACmdOption option) throws FileNotFoundException, IOException
+    public Inferencer(LDACmdOption option, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
     {
         this.option = option;
+        this.dbConnector = dbConnector;
 
-        trnModel = new Model(option);
+        trnModel = new Model(option, dbConnector);
         trnModel.init(false);
 
         globalDict = trnModel.data.localDict;
@@ -56,11 +61,11 @@ public class Inferencer
     //inference new model ~ getting data from a specified dataset
     public Model inference() throws FileNotFoundException, IOException
     {
-        newModel = new Model(option, trnModel);
+        newModel = new Model(option, trnModel, this.dbConnector);
         newModel.init(true);
         newModel.initInf();
 
-        System.out.println("Sampling " + newModel.niters + " iterations for inference!");		
+        System.out.println("Sampling " + newModel.niters + " iterations for inference!");
         System.out.print("Iteration");
         for (newModel.liter = 1; newModel.liter <= newModel.niters; newModel.liter++){
             System.out.format("%6d", newModel.liter);
@@ -125,7 +130,7 @@ public class Inferencer
         // determine number of possible topics for this document
         int K_m = (labels == null) ? newModel.K : labels.length;
 
-        // do multinomial sampling via cumulative method		
+        // do multinomial sampling via cumulative method
         double[] p = newModel.p;
         for (int k = 0; k < K_m; k++) {
             topic = labels == null ? k : labels[k];

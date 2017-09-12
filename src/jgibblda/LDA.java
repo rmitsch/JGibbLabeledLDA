@@ -1,11 +1,11 @@
 /*
  * Copyright (C) 2007 by
- * 
+ *
  * 	Xuan-Hieu Phan
  *	hieuxuan@ecei.tohoku.ac.jp or pxhieu@gmail.com
  * 	Graduate School of Information Sciences
  * 	Tohoku University
- * 
+ *
  *  Cam-Tu Nguyen
  *  ncamtu@gmail.com
  *  College of Technology
@@ -29,8 +29,11 @@
 package jgibblda;
 
 import java.io.FileNotFoundException;
+import java.util.Scanner;
 
 import org.kohsuke.args4j.*;
+
+import tapas.DatabaseConnector;
 
 public class LDA
 {
@@ -46,13 +49,19 @@ public class LDA
             }
 
             parser.parseArgument(args);
+            // Build connection to database.
+            System.out.println(option.db_host);
+            System.out.println(option.db_port);
+            DatabaseConnector dbConnector = new DatabaseConnector(option);
+            Scanner sc = new Scanner(System.in);
+            sc.nextLine();
 
             if (option.est || option.estc){
-                Estimator estimator = new Estimator(option);
+                Estimator estimator = new Estimator(option, dbConnector);
                 estimator.estimate();
             }
             else if (option.inf){
-                Inferencer inferencer = new Inferencer(option);
+                Inferencer inferencer = new Inferencer(option, dbConnector);
                 Model newModel = inferencer.inference();
             }
         } catch (CmdLineException cle){

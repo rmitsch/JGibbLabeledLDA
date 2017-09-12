@@ -38,3 +38,6 @@ __pycache__
 ehthumbs.db
 Icon?
 Thumbs.db
+
+# Dolphin
+.directory

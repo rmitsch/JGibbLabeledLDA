@@ -1,11 +1,11 @@
 /*
  * Copyright (C) 2007 by
- * 
+ *
  * 	Xuan-Hieu Phan
  *	hieuxuan@ecei.tohoku.ac.jp or pxhieu@gmail.com
  * 	Graduate School of Information Sciences
  * 	Tohoku University
- * 
+ *
  *  Cam-Tu Nguyen
  *  ncamtu@gmail.com
  *  College of Technology
@@ -38,14 +38,16 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Scanner;
 import java.util.StringTokenizer;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import gnu.trove.list.array.TIntArrayList;
 import gnu.trove.map.hash.TIntObjectHashMap;
+import tapas.DatabaseConnector;
 
-public class Model {	
+public class Model {
 
     //---------------------------------------------------------------
     //	Class Variables
@@ -78,7 +80,7 @@ public class Model {
     public int nburnin = 500;  // number of Gibbs sampling burn-in iterations
     public int samplingLag = 5;// Gibbs sampling sample lag
     public int numSamples = 1; // number of samples taken
-    public int liter = 0;      // the iteration at which the model was saved	
+    public int liter = 0;      // the iteration at which the model was saved
     public int twords = 20;    // print out top words per each topic
 
     // Estimated/Inferenced parameters
@@ -96,19 +98,24 @@ public class Model {
     protected int[][] nwsum_inf = null;      // nwsum[m][j]: total number of words assigned to topic j in doc m, size M x K
 
     // temp variables for sampling
-    protected double[] p = null; 
+    protected double[] p = null;
+
+    // Connector to database.
+    private DatabaseConnector dbConnector;
 
     //---------------------------------------------------------------
     //	Constructors
-    //---------------------------------------------------------------	
+    //---------------------------------------------------------------
 
-    public Model(LDACmdOption option) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
     {
-        this(option, null);
+        this(option, null, dbConnector);
     }
 
-    public Model(LDACmdOption option, Model trnModel) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
     {
+    	this.dbConnector = dbConnector;
+
         modelName = option.modelName;
         K = option.K;
 
@@ -146,8 +153,12 @@ public class Model {
                 beta = trnModel.beta;
         }
 
-        // read in data
-        data.readDataSet(dir + File.separator + dfile, unlabeled);
+        // read in data base
+//        data.readDataSet(dir + File.separator + dfile, unlabeled);
+//        data.readDataSet(unlabeled);
+        System.out.println("until here");
+        (new Scanner(System.in)).nextLine();
+
     }
 
     //---------------------------------------------------------------
@@ -164,8 +175,9 @@ public class Model {
             V = data.V;
             z = new TIntArrayList[M];
         } else {
+        	// Note: This branch is only used for inference, not for estimation - hence not necessary if only estimation is to be performed.
             if (!loadModel()) {
-                System.out.println("Fail to load word-topic assignment file of the model!"); 
+                System.out.println("Fail to load word-topic assignment file of the model!");
                 return false;
             }
 
@@ -209,7 +221,7 @@ public class Model {
             ndsum[m] = N; // total number of words in document i
         }
 
-        theta = new double[M][K];		
+        theta = new double[M][K];
         phi = new double[K][V];
 
         return true;
@@ -506,14 +518,14 @@ public class Model {
             }
 
             for (int k = 0; k < K; k++){
-                ArrayList<Pair> wordsProbsList = new ArrayList<Pair>(); 
+                ArrayList<Pair> wordsProbsList = new ArrayList<Pair>();
                 for (int w = 0; w < V; w++){
                     Pair p = new Pair(w, phi[k][w], false);
 
                     wordsProbsList.add(p);
                 }//end foreach word
 
-                //print topic				
+                //print topic
                 writer.write("Topic " + k + ":\n");
                 Collections.sort(wordsProbsList);
 
@@ -524,7 +536,7 @@ public class Model {
                         writer.write("\t" + word + "\t" + wordsProbsList.get(i).second + "\n");
                     }
                 }
-            } //end foreach topic			
+            } //end foreach topic
 
             writer.close();
         }
@@ -576,7 +588,7 @@ public class Model {
                 String optval = tknr.nextToken();
 
                 if (optstr.equalsIgnoreCase("alpha")){
-                    alpha = Double.parseDouble(optval);					
+                    alpha = Double.parseDouble(optval);
                 }
                 else if (optstr.equalsIgnoreCase("beta")){
                     beta = Double.parseDouble(optval);
@@ -620,10 +632,10 @@ public class Model {
                             new FileInputStream(tassignFile)), "UTF-8"));
 
             String line;
-            z = new TIntArrayList[M];			
+            z = new TIntArrayList[M];
             data = new LDADataset();
             data.setM(M);
-            data.V = V;			
+            data.V = V;
             for (i = 0; i < M; i++){
                 line = reader.readLine();
                 StringTokenizer tknr = new StringTokenizer(line, " \t\r\n");
