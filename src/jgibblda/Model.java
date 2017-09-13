@@ -107,14 +107,29 @@ public class Model {
     //	Constructors
     //---------------------------------------------------------------
 
-    public Model(LDACmdOption option, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
-        this(option, null, dbConnector);
+        this(option, null, dbConnector, data);
     }
 
-    public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
     	this.dbConnector = dbConnector;
+
+        // initialize dataset
+        this.data = data;
+
+        // process trnModel (if given) - for inference
+        if (trnModel != null) {
+            data.setDictionary(trnModel.data.localDict);
+            K = trnModel.K;
+
+            // use hyperparameters from model (if not overridden in options)
+            if (option.alpha < 0.0)
+                alpha = trnModel.alpha;
+            if (option.beta < 0.0)
+                beta = trnModel.beta;
+        }
 
         modelName = option.modelName;
         K = option.K;
@@ -137,28 +152,6 @@ public class Model {
         dfile = option.dfile;
         unlabeled = option.unlabeled;
         twords = option.twords;
-
-        // initialize dataset
-        data = new LDADataset();
-
-        // process trnModel (if given)
-        if (trnModel != null) {
-            data.setDictionary(trnModel.data.localDict);
-            K = trnModel.K;
-
-            // use hyperparameters from model (if not overridden in options)
-            if (option.alpha < 0.0)
-                alpha = trnModel.alpha;
-            if (option.beta < 0.0)
-                beta = trnModel.beta;
-        }
-
-        // read in data base
-//        data.readDataSet(dir + File.separator + dfile, unlabeled);
-//        data.readDataSet(unlabeled);
-        System.out.println("until here");
-        (new Scanner(System.in)).nextLine();
-
     }
 
     //---------------------------------------------------------------
@@ -222,6 +215,8 @@ public class Model {
         }
 
         theta = new double[M][K];
+        System.out.println(K * V * 8 / 1024 / 1024);
+        System.out.println(M * K * 8 / 1024 / 1024);
         phi = new double[K][V];
 
         return true;
@@ -420,6 +415,8 @@ public class Model {
             e.printStackTrace();
             return false;
         }
+
+        System.out.println("Saving modelTAssign");
         return true;
     }
 

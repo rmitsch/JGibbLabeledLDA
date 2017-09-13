@@ -40,12 +40,12 @@ public class Estimator
     LDACmdOption option;
     private DatabaseConnector dbConnector;
 
-    public Estimator(LDACmdOption option, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
+    public Estimator(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
         this.option = option;
         this.dbConnector = dbConnector;
 
-        trnModel = new Model(option, dbConnector);
+        trnModel = new Model(option, dbConnector, data);
 
         if (option.est){
             trnModel.init(true);

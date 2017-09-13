@@ -38,6 +38,7 @@ import java.util.zip.GZIPInputStream;
 import gnu.trove.list.array.TIntArrayList;
 import gnu.trove.map.hash.TIntIntHashMap;
 import gnu.trove.set.hash.TIntHashSet;
+import tapas.DatabaseConnector;
 
 public class LDADataset {
     //---------------------------------------------------------------
@@ -184,26 +185,18 @@ public class LDADataset {
      * read a dataset from TAPAS database
      * @return true if success and false otherwise
      */
-//    public boolean readDataSet(boolean unlabeled) throws FileNotFoundException, IOException
-//    {
-//        BufferedReader reader = new BufferedReader(new InputStreamReader(
-//                    new GZIPInputStream(
-//                        new FileInputStream(filename)), "UTF-8"));
-//        try {
-//            String line;
-//            while ((line = reader.readLine()) != null) {
-//                addDoc(line, unlabeled);
-//            }
-//            setM(docs.size());
-//
-//            // debug output
-//            System.out.println("Dataset loaded:");
-//            System.out.println("\tM:" + M);
-//            System.out.println("\tV:" + V);
-//
-//            return true;
-//        } finally {
-//            reader.close();
-//        }
-//    }
+    public boolean readDataSet(int corpusID, DatabaseConnector dbConnector, boolean unlabeled) throws FileNotFoundException, IOException
+    {
+    	for (String labeledDocument : dbConnector.loadLabeledDocumentsInCorpus(corpusID)) {
+    		addDoc(labeledDocument, unlabeled);
+    	}
+        setM(docs.size());
+
+        // debug output
+        System.out.println("Dataset loaded:");
+        System.out.println("\tM:" + M);
+        System.out.println("\tV:" + V);
+
+        return true;
+    }
 }

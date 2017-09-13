@@ -29,6 +29,7 @@
 package jgibblda;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.Scanner;
 
 import org.kohsuke.args4j.*;
@@ -49,20 +50,22 @@ public class LDA
             }
 
             parser.parseArgument(args);
+
             // Build connection to database.
-            System.out.println(option.db_host);
-            System.out.println(option.db_port);
             DatabaseConnector dbConnector = new DatabaseConnector(option);
-            Scanner sc = new Scanner(System.in);
-            sc.nextLine();
+
+            // Load dataset.
+            LDADataset data = new LDADataset();
+            LDA.loadData(data, dbConnector, option);
 
             if (option.est || option.estc){
-                Estimator estimator = new Estimator(option, dbConnector);
+                Estimator estimator = new Estimator(option, dbConnector, data);
                 estimator.estimate();
             }
             else if (option.inf){
-                Inferencer inferencer = new Inferencer(option, dbConnector);
-                Model newModel = inferencer.inference();
+            	// Disregard inferencer for now - not tested, hence not supported unless it becomes necessary for TAPAS.
+//                Inferencer inferencer = new Inferencer(option, dbConnector, data);
+//                Model newModel = inferencer.inference();
             }
         } catch (CmdLineException cle){
             System.out.println("Command line error: " + cle.getMessage());
@@ -76,6 +79,31 @@ public class LDA
             e.printStackTrace();
             return;
         }
+    }
+
+    /**
+     * Loads dataset from DB and updates options based on result.
+     * @param data
+     */
+    private static void loadData(LDADataset data, DatabaseConnector dbConnector, LDACmdOption option)
+    {
+    	int topicModelID = Integer.parseInt(option.db_topic_model_id);
+
+        try {
+            // Read data set in specified database.
+			data.readDataSet(topicModelID, dbConnector, option.unlabeled);
+	        // After reading data set: Derive implicit (topic-model dependent) options.
+	        option.deriveImplicitSettings(	dbConnector.extractTopicModel(topicModelID),
+	        								DatabaseConnector.corpusFacetIDs_globalToLocal.size());
+		}
+
+        catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+
+        catch (IOException e) {
+			e.printStackTrace();
+		}
     }
 
     public static void showHelp(CmdLineParser parser){

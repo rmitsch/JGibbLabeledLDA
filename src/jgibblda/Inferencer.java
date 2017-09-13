@@ -47,12 +47,12 @@ public class Inferencer
     //-----------------------------------------------------
     // Init method
     //-----------------------------------------------------
-    public Inferencer(LDACmdOption option, DatabaseConnector dbConnector) throws FileNotFoundException, IOException
+    public Inferencer(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
         this.option = option;
         this.dbConnector = dbConnector;
 
-        trnModel = new Model(option, dbConnector);
+        trnModel = new Model(option, dbConnector, data);
         trnModel.init(false);
 
         globalDict = trnModel.data.localDict;
@@ -61,7 +61,8 @@ public class Inferencer
     //inference new model ~ getting data from a specified dataset
     public Model inference() throws FileNotFoundException, IOException
     {
-        newModel = new Model(option, trnModel, this.dbConnector);
+    	// @todo Instance of LDADatasethas to be propagated to Model here.
+        newModel = new Model(option, trnModel, this.dbConnector, null);
         newModel.init(true);
         newModel.initInf();
 
