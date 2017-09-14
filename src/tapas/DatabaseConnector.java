@@ -114,20 +114,28 @@ public class DatabaseConnector
 
 			// 2. Load documents and corpus facets. Use the latter for generating array of local label indices.
 			st = conn.prepareStatement(
-					"SELECT d.id, d.refined_text, array_agg(cf.id) corpus_facet_ids_in_document FROM topac.documents d "
+					"SELECT d.id, d.refined_text, array_agg(cf.id) corpus_facet_ids_in_document "
+					+ "FROM topac.documents d "
 					+ "inner join topac.corpus_features_in_documents cfid on "
 					+ "	cfid.documents_id = d.id "
 					+ "inner join topac.corpus_facets cf on "
 					+ "cf.corpus_features_id = cfid.corpus_features_id and "
 					+ "cf.corpus_feature_value = cfid.value "
-					+ "WHERE d.corpora_id = ? "
+					+ "inner join topac.corpus_features cfe on "
+					+ "	cfe.id = cf.corpus_features_id and"
+					+ "	cfe.title != 'document_id'"
+					+ "WHERE "
+					+ "	d.corpora_id = ?"
+					// Don't use document IDs as facets (for summarization? There are other methods; e. g. inferring doc. if really necessary).
+					+ ""
+					+ ""
 					+ "group by "
 					+ "d.id, d.refined_text");
 
 			st.setInt(1, corpusID);
 			rs = st.executeQuery();
 
-			// Prepare array of document string.
+			// 3. Prepare array of document string.
 			int localFacetIndex = 0;
 			int rowIndex = 0;
 			while (rs.next()) {
@@ -162,5 +170,37 @@ public class DatabaseConnector
 		}
 
 		return labeledDocuments;
+	}
+
+	public Map<String, Integer> loadWordToIDMap(int corpusID)
+	{
+		PreparedStatement st;
+		ResultSet rs;
+		Map<String, Integer> wordsToIDs = new HashMap<String, Integer>();
+
+		// 2. Load documents and corpus facets. Use the latter for generating array of local label indices.
+		try {
+			st = conn.prepareStatement(
+					"select "
+					+ "  t.term, "
+					+ "  tic.id "
+					+ "from "
+					+ "  topac.terms_in_corpora tic "
+					+ "inner join topac.terms t on "
+					+ "  t.id = tic.terms_id "
+					+ "where tic.corpora_id = ?");
+			st.setInt(1, corpusID);
+			rs = st.executeQuery();
+
+			while (rs.next()) {
+				wordsToIDs.put(rs.getString("term"), rs.getInt("id"));
+			}
+		}
+
+		catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return wordsToIDs;
 	}
 }

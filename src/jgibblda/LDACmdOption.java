@@ -63,6 +63,7 @@ public class LDACmdOption {
     public double beta = -1;
     public int niters = 1000;
     public int K = 100;
+    public int corpusID;
 
     // ----------------------------------
     // From here: Methods.
@@ -81,6 +82,8 @@ public class LDACmdOption {
     	this.niters = topicModel.getN_iterations();
     	// Number of topics has to equal to the number of facets.
     	this.K = numberOfFacets;
+    	// ID of corpus in DB.
+    	this.corpusID = topicModel.getCorpora_id();
     }
 
 }

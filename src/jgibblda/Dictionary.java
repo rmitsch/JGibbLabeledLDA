@@ -1,11 +1,11 @@
 /*
  * Copyright (C) 2007 by
- * 
+ *
  * 	Xuan-Hieu Phan
  *	hieuxuan@ecei.tohoku.ac.jp or pxhieu@gmail.com
  * 	Graduate School of Information Sciences
  * 	Tohoku University
- * 
+ *
  *  Cam-Tu Nguyen
  *  ncamtu@gmail.com
  *  College of Technology
@@ -93,7 +93,7 @@ public class Dictionary {
 
             return id;
         }
-        else return getID(word);		
+        else return getID(word);
     }
 
     //---------------------------------------------------
@@ -123,7 +123,7 @@ public class Dictionary {
             System.out.println("Error while reading dictionary:" + e.getMessage());
             e.printStackTrace();
             return false;
-        }		
+        }
     }
 
     public boolean writeWordMap(String wordMapFile)

@@ -30,6 +30,7 @@ package jgibblda;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Map;
 
 import tapas.DatabaseConnector;
 
@@ -39,13 +40,16 @@ public class Estimator
     protected Model trnModel;
     LDACmdOption option;
     private DatabaseConnector dbConnector;
+    // Map translating words to database IDs (terms_in_corpora.id).
+    private Map<String, Integer> wordsToDBIDs;
 
-    public Estimator(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
+    public Estimator(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data, Map<String, Integer> wordsToDBIDs) throws FileNotFoundException, IOException
     {
         this.option = option;
         this.dbConnector = dbConnector;
+        this.wordsToDBIDs = wordsToDBIDs;
 
-        trnModel = new Model(option, dbConnector, data);
+        trnModel = new Model(option, dbConnector, data, wordsToDBIDs);
 
         if (option.est){
             trnModel.init(true);

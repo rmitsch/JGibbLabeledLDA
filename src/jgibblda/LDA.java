@@ -30,11 +30,13 @@ package jgibblda;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Scanner;
 
 import org.kohsuke.args4j.*;
 
 import tapas.DatabaseConnector;
+import tapas.TopicModel;
 
 public class LDA
 {
@@ -57,24 +59,32 @@ public class LDA
             // Load dataset.
             LDADataset data = new LDADataset();
             LDA.loadData(data, dbConnector, option);
+            // Load map of words in DB to IDs.
+            Map<String, Integer> wordsToDBIDs = dbConnector.loadWordToIDMap(option.corpusID);
 
             if (option.est || option.estc){
-                Estimator estimator = new Estimator(option, dbConnector, data);
+                Estimator estimator = new Estimator(option, dbConnector, data, wordsToDBIDs);
                 estimator.estimate();
             }
-            else if (option.inf){
-            	// Disregard inferencer for now - not tested, hence not supported unless it becomes necessary for TAPAS.
+         // Disregard inferencer for now - not tested, hence not supported unless it becomes necessary for TAPAS.
+//            else if (option.inf){
 //                Inferencer inferencer = new Inferencer(option, dbConnector, data);
 //                Model newModel = inferencer.inference();
-            }
-        } catch (CmdLineException cle){
+//            }
+        }
+
+        catch (CmdLineException cle){
             System.out.println("Command line error: " + cle.getMessage());
             showHelp(parser);
             return;
-        } catch (FileNotFoundException e) {
+        }
+
+        catch (FileNotFoundException e) {
             e.printStackTrace();
             return;
-        } catch (Exception e){
+        }
+
+        catch (Exception e){
             System.out.println("Error in main: " + e.getMessage());
             e.printStackTrace();
             return;
@@ -90,10 +100,13 @@ public class LDA
     	int topicModelID = Integer.parseInt(option.db_topic_model_id);
 
         try {
+        	// Fetch topic model.
+        	TopicModel topicModel = dbConnector.extractTopicModel(topicModelID);
+
             // Read data set in specified database.
-			data.readDataSet(topicModelID, dbConnector, option.unlabeled);
+			data.readDataSet(topicModel.getCorpora_id(), dbConnector, option.unlabeled);
 	        // After reading data set: Derive implicit (topic-model dependent) options.
-	        option.deriveImplicitSettings(	dbConnector.extractTopicModel(topicModelID),
+	        option.deriveImplicitSettings(	topicModel,
 	        								DatabaseConnector.corpusFacetIDs_globalToLocal.size());
 		}
 

@@ -38,6 +38,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.StringTokenizer;
 import java.util.zip.GZIPInputStream;
@@ -102,19 +103,22 @@ public class Model {
 
     // Connector to database.
     private DatabaseConnector dbConnector;
+    // Map translating words to database IDs (terms_in_corpora.id).
+    Map<String, Integer> wordsToDBIDs;
 
     //---------------------------------------------------------------
     //	Constructors
     //---------------------------------------------------------------
 
-    public Model(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data, Map<String, Integer> wordsToDBIDs) throws FileNotFoundException, IOException
     {
-        this(option, null, dbConnector, data);
+        this(option, null, dbConnector, data, wordsToDBIDs);
     }
 
-    public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector, LDADataset data, Map<String, Integer> wordsToDBIDs) throws FileNotFoundException, IOException
     {
     	this.dbConnector = dbConnector;
+    	this.wordsToDBIDs = wordsToDBIDs;
 
         // initialize dataset
         this.data = data;
@@ -358,33 +362,45 @@ public class Model {
     {
         return saveModel("");
     }
+
     public boolean saveModel(String modelPrefix)
     {
-        if (!saveModelTAssign(dir + File.separator + modelPrefix + modelName + tassignSuffix)) {
-            return false;
-        }
+    	// 1. Iterate over theta. Columns: topics, rows: documents.
+    	// Topic IDs should be able to be translated using the local-to-global dictionary produced upstream (DBConnector?).
+    	// That way, topics can associated with the corresponding corpus_facets.
+    	// Possible approach: Sample first row matrix; construct topics (representation: bean or dict or DB ID (!)...) with the
+    	// corresponding properties (facet ID etc.). Insert topics in DB.
+    	// 2. Iterate over theta, insert topic-doc probabilities in DB (using existing translation dictionaries and topic IDs).
+    	// 3. Iterate over phi, insert word-topic assignments.
+    	// 4. Commit, close transaction.
+    	// After that:
+    	//	- Start refactoring and introducing multi-threading.
+    	//	- Update python code - remove unnecessary steps, call and monitor LLDA execution.
+    	//	- Small improvements in DB (replace topac with tapas, connection between facets and document values etc.).
+    	//	- UI prototype.
 
-        if (!saveModelOthers(dir + File.separator + modelPrefix + modelName + othersSuffix)) {
-            return false;
-        }
+    	this.dir = "/home/raphael/";
+    	this.modelName = "blub";
+//        if (!saveModelTAssign(dir + File.separator + modelPrefix + modelName + tassignSuffix)) {
+//            return false;
+//        }
 
+//        if (!saveModelOthers(dir + File.separator + modelPrefix + modelName + othersSuffix)) {
+//            return false;
+//        }
+//
         if (!saveModelTheta(dir + File.separator + modelPrefix + modelName + thetaSuffix)) {
             return false;
         }
+//
+//        if (!saveModelPhi(dir + File.separator + modelPrefix + modelName + phiSuffix)) {
+//            return false;
+//        }
 
-        //if (!saveModelPhi(dir + File.separator + modelPrefix + modelName + phiSuffix)) {
-        //    return false;
-        //}
 
-        if (twords > 0) {
-            if (!saveModelTwords(dir + File.separator + modelPrefix + modelName + twordsSuffix)) {
-                return false;
-            }
-        }
-
-        if (!data.localDict.writeWordMap(dir + File.separator + modelPrefix + modelName + wordMapSuffix)) {
-            return false;
-        }
+//        if (!data.localDict.writeWordMap("/home/raphael/" + File.separator + modelPrefix + "blub" + wordMapSuffix)) {
+//            return false;
+//        }
 
         return true;
     }
@@ -417,6 +433,37 @@ public class Model {
         }
 
         System.out.println("Saving modelTAssign");
+        return true;
+    }
+
+    /**
+     * Save word-topic assignments for this model in DB.
+     */
+    public boolean saveModelTAssign() {
+        int i, j;
+
+//        try{
+//            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
+//                        new GZIPOutputStream(
+//                            new FileOutputStream(filename)), "UTF-8"));
+//
+//            //write docs with topic assignments for words
+//            for (i = 0; i < data.M; i++) {
+//                for (j = 0; j < data.docs.get(i).length; ++j) {
+//                    writer.write(data.docs.get(i).words[j] + ":" + z[i].get(j) + " ");
+//                }
+//                writer.write("\n");
+//            }
+//
+//            writer.close();
+//        }
+//        catch (Exception e) {
+//            System.out.println("Error while saving model tassign: " + e.getMessage());
+//            e.printStackTrace();
+//            return false;
+//        }
+//
+//        System.out.println("Saving modelTAssign");
         return true;
     }
 
