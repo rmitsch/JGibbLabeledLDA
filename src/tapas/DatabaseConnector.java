@@ -17,6 +17,10 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.zip.GZIPOutputStream;
 
+import org.postgresql.copy.CopyIn;
+import org.postgresql.copy.CopyManager;
+import org.postgresql.core.BaseConnection;
+
 import com.sun.webkit.graphics.Ref;
 
 import jgibblda.LDACmdOption;
@@ -323,45 +327,32 @@ public class DatabaseConnector
 			st.execute();
 			conn.commit();
 
-			// Prepare statement for insertion of topics.
-			st =  conn.prepareStatement(
-					"insert into topac.terms_in_topics ("
-					+ "	topics_id, "
-					+ " terms_in_corpora_id, "
-					+ " probability "
-					+ ") "
-					+ "values (?, ?, ?)"
-			);
-
 			// Define batch size to reduce memory footprint.
 			final int batchSize = 5000000;
 			int count = 0;
-			System.out.println(V + ", " + K + ", count = " + (K * V));
+
+			CopyManager copyManager = new CopyManager((BaseConnection) conn);
+			CopyIn copyIn = copyManager.copyIn("COPY topac.terms_in_topics FROM STDIN WITH DELIMITER ','");
 
 			// Iterate over topics.
 			for (int i = 0; i < K; i++) {
-				System.out.println((float)i / K * 100);
 				// Fetch corresponding ID of facet in DB.
 				int facetID = data.corpusFacetIDs_localToGlobal.get(i);
 				// Fetch ID of corresponding topic in DB.
 				int topicID = facetDBIDs_to_topicDBIDs.get(facetID);
 
-				st.setInt(1, topicID);
-
 				// Iterate over words.
 	            for (int j = 0; j < V; j++) {
-	            	// Look up word, then look up terms_in_corpora_id for word.
-	            	st.setInt(2, data.wordsToDBIDs.get(data.localDict.getWord(j)));
-	            	st.setFloat(3, (float)phi[i][j]);
-
-		            // Add to batch.
-		            st.addBatch();
+	            	byte[] bytesToAppend = (topicID + "," + data.wordsToDBIDs.get(data.localDict.getWord(j)) + "," + (float)phi[i][j] + "\n").getBytes();
+	                copyIn.writeToCopy(bytesToAppend, 0, bytesToAppend.length);
 
 		            // Execute batch if batch size is reached.
 		            if(++count % batchSize == 0) {
 		            	System.out.println("Executing batch");
-		            	st.executeBatch();
+		            	copyIn.endCopy();
 		            	conn.commit();
+		            	// Prepare copyIn instance for next batch.
+		            	copyIn = copyManager.copyIn("COPY topac.terms_in_topics FROM STDIN WITH DELIMITER ','");
 		            }
 	            }
 	        }
