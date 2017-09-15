@@ -56,14 +56,18 @@ public class LDA
             // Build connection to database.
             DatabaseConnector dbConnector = new DatabaseConnector(option);
 
+//            REFACTORING: Create Corpus (or similar) class containing index translation maps etc.
+//            Use that as container for arguments.
+//            Alt.: Add to LDADataset (preferred!).
+
             // Load dataset.
-            LDADataset data = new LDADataset();
-            LDA.loadData(data, dbConnector, option);
-            // Load map of words in DB to IDs.
-            Map<String, Integer> wordsToDBIDs = dbConnector.loadWordToIDMap(option.corpusID);
+            System.out.println(option.alpha);
+            LDADataset data = new LDADataset(option, true);
+            System.out.println(option.alpha);
+            System.exit(0);
 
             if (option.est || option.estc){
-                Estimator estimator = new Estimator(option, dbConnector, data, wordsToDBIDs);
+                Estimator estimator = new Estimator(option, dbConnector, data);
                 estimator.estimate();
             }
          // Disregard inferencer for now - not tested, hence not supported unless it becomes necessary for TAPAS.
@@ -89,34 +93,6 @@ public class LDA
             e.printStackTrace();
             return;
         }
-    }
-
-    /**
-     * Loads dataset from DB and updates options based on result.
-     * @param data
-     */
-    private static void loadData(LDADataset data, DatabaseConnector dbConnector, LDACmdOption option)
-    {
-    	int topicModelID = Integer.parseInt(option.db_topic_model_id);
-
-        try {
-        	// Fetch topic model.
-        	TopicModel topicModel = dbConnector.extractTopicModel(topicModelID);
-
-            // Read data set in specified database.
-			data.readDataSet(topicModel.getCorpora_id(), dbConnector, option.unlabeled);
-	        // After reading data set: Derive implicit (topic-model dependent) options.
-	        option.deriveImplicitSettings(	topicModel,
-	        								DatabaseConnector.corpusFacetIDs_globalToLocal.size());
-		}
-
-        catch (FileNotFoundException e) {
-			e.printStackTrace();
-		}
-
-        catch (IOException e) {
-			e.printStackTrace();
-		}
     }
 
     public static void showHelp(CmdLineParser parser){

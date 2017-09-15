@@ -103,22 +103,19 @@ public class Model {
 
     // Connector to database.
     private DatabaseConnector dbConnector;
-    // Map translating words to database IDs (terms_in_corpora.id).
-    Map<String, Integer> wordsToDBIDs;
 
     //---------------------------------------------------------------
     //	Constructors
     //---------------------------------------------------------------
 
-    public Model(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data, Map<String, Integer> wordsToDBIDs) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
-        this(option, null, dbConnector, data, wordsToDBIDs);
+        this(option, null, dbConnector, data);
     }
 
-    public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector, LDADataset data, Map<String, Integer> wordsToDBIDs) throws FileNotFoundException, IOException
+    public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
     	this.dbConnector = dbConnector;
-    	this.wordsToDBIDs = wordsToDBIDs;
 
         // initialize dataset
         this.data = data;
@@ -366,6 +363,7 @@ public class Model {
     public boolean saveModel(String modelPrefix)
     {
     	// 1. Iterate over theta. Columns: topics, rows: documents.
+    	// Alt.: Iterate over dictionary.
     	// Topic IDs should be able to be translated using the local-to-global dictionary produced upstream (DBConnector?).
     	// That way, topics can associated with the corresponding corpus_facets.
     	// Possible approach: Sample first row matrix; construct topics (representation: bean or dict or DB ID (!)...) with the
@@ -378,6 +376,8 @@ public class Model {
     	//	- Update python code - remove unnecessary steps, call and monitor LLDA execution.
     	//	- Small improvements in DB (replace topac with tapas, connection between facets and document values etc.).
     	//	- UI prototype.
+
+
 
     	this.dir = "/home/raphael/";
     	this.modelName = "blub";
@@ -666,60 +666,62 @@ public class Model {
 
     /**
      * Load word-topic assignments for this model
+     * Ingored for now since not necessary for estimation task.
      */
     protected boolean readTAssignFile(String tassignFile)
     {
-        try {
-            int i,j;
-            BufferedReader reader = new BufferedReader(new InputStreamReader(
-                        new GZIPInputStream(
-                            new FileInputStream(tassignFile)), "UTF-8"));
-
-            String line;
-            z = new TIntArrayList[M];
-            data = new LDADataset();
-            data.setM(M);
-            data.V = V;
-            for (i = 0; i < M; i++){
-                line = reader.readLine();
-                StringTokenizer tknr = new StringTokenizer(line, " \t\r\n");
-
-                int length = tknr.countTokens();
-
-                TIntArrayList words = new TIntArrayList();
-                TIntArrayList topics = new TIntArrayList();
-                for (j = 0; j < length; j++){
-                    String token = tknr.nextToken();
-
-                    StringTokenizer tknr2 = new StringTokenizer(token, ":");
-                    if (tknr2.countTokens() != 2){
-                        System.out.println("Invalid word-topic assignment line\n");
-                        return false;
-                    }
-
-                    words.add(Integer.parseInt(tknr2.nextToken()));
-                    topics.add(Integer.parseInt(tknr2.nextToken()));
-                }//end for each topic assignment
-
-                //allocate and add new document to the corpus
-                Document doc = new Document(words);
-                data.setDoc(doc, i);
-
-                //assign values for z
-                z[i] = new TIntArrayList();
-                for (j = 0; j < topics.size(); j++){
-                    z[i].add(topics.get(j));
-                }
-
-            }//end for each doc
-
-            reader.close();
-        }
-        catch (Exception e){
-            System.out.println("Error while loading model: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-        return true;
+    	return false;
+//        try {
+//            int i,j;
+//            BufferedReader reader = new BufferedReader(new InputStreamReader(
+//                        new GZIPInputStream(
+//                            new FileInputStream(tassignFile)), "UTF-8"));
+//
+//            String line;
+//            z = new TIntArrayList[M];
+//            data = new LDADataset();
+//            data.setM(M);
+//            data.V = V;
+//            for (i = 0; i < M; i++){
+//                line = reader.readLine();
+//                StringTokenizer tknr = new StringTokenizer(line, " \t\r\n");
+//
+//                int length = tknr.countTokens();
+//
+//                TIntArrayList words = new TIntArrayList();
+//                TIntArrayList topics = new TIntArrayList();
+//                for (j = 0; j < length; j++){
+//                    String token = tknr.nextToken();
+//
+//                    StringTokenizer tknr2 = new StringTokenizer(token, ":");
+//                    if (tknr2.countTokens() != 2){
+//                        System.out.println("Invalid word-topic assignment line\n");
+//                        return false;
+//                    }
+//
+//                    words.add(Integer.parseInt(tknr2.nextToken()));
+//                    topics.add(Integer.parseInt(tknr2.nextToken()));
+//                }//end for each topic assignment
+//
+//                //allocate and add new document to the corpus
+//                Document doc = new Document(words);
+//                data.setDoc(doc, i);
+//
+//                //assign values for z
+//                z[i] = new TIntArrayList();
+//                for (j = 0; j < topics.size(); j++){
+//                    z[i].add(topics.get(j));
+//                }
+//
+//            }//end for each doc
+//
+//            reader.close();
+//        }
+//        catch (Exception e){
+//            System.out.println("Error while loading model: " + e.getMessage());
+//            e.printStackTrace();
+//            return false;
+//        }
+//        return true;
     }
 }

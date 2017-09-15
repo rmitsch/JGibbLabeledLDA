@@ -44,18 +44,16 @@ public class Inferencer
     private Model newModel;
 
     private DatabaseConnector dbConnector;
-    private Map<String, Integer> wordsToDBIDs;
 
     //-----------------------------------------------------
     // Init method
     //-----------------------------------------------------
-    public Inferencer(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data, Map<String, Integer> wordsToDBIDs) throws FileNotFoundException, IOException
+    public Inferencer(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
         this.option = option;
         this.dbConnector = dbConnector;
-        this.wordsToDBIDs = wordsToDBIDs;
 
-        trnModel = new Model(option, dbConnector, data, wordsToDBIDs);
+        trnModel = new Model(option, dbConnector, data);
         trnModel.init(false);
 
         globalDict = trnModel.data.localDict;
@@ -65,7 +63,7 @@ public class Inferencer
     public Model inference() throws FileNotFoundException, IOException
     {
     	// @todo Instance of LDADatasethas to be propagated to Model here.
-        newModel = new Model(option, trnModel, this.dbConnector, null, wordsToDBIDs);
+        newModel = new Model(option, trnModel, this.dbConnector, null);
         newModel.init(true);
         newModel.initInf();
 

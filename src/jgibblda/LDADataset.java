@@ -32,13 +32,18 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.zip.GZIPInputStream;
 
 import gnu.trove.list.array.TIntArrayList;
 import gnu.trove.map.hash.TIntIntHashMap;
 import gnu.trove.set.hash.TIntHashSet;
+import tapas.CorpusInformation;
 import tapas.DatabaseConnector;
+import tapas.TopicModel;
 
 public class LDADataset {
     //---------------------------------------------------------------
@@ -57,9 +62,65 @@ public class LDADataset {
     //link to a global dictionary (optional), null for train data, not null for test data
     public Dictionary globalDict = null;
 
+    // Connection to database.
+    DatabaseConnector dbConnector;
+
+	/**
+	 * Contains map for translation between corpus facet's (~ labels') ID in DB and the local one used for ingestion of data into LLDA.
+	 * Static, since other instances access the translation too.
+	 */
+	public Map<Integer, Integer> corpusFacetIDs_globalToLocal;
+	public Map<Integer, Integer> corpusFacetIDs_localToGlobal;
+
+	/**
+	 * Map for translating words to IDs (in DB table for terms_in_corpora).
+	 */
+	public Map<String, Integer> wordsToDBIDs;
+
     //-------------------------------------------------------------
     //Public Instance Methods
     //-------------------------------------------------------------
+
+    public LDADataset(LDACmdOption option, boolean readCorpus)
+    {
+    	this.dbConnector = new DatabaseConnector(option);
+
+    	// Initialize maps for ID translation.
+    	wordsToDBIDs 					= new HashMap<String, Integer>();
+
+    	if (readCorpus) {
+    		// Fetch topic model.
+        	TopicModel topicModel = dbConnector.extractTopicModel(Integer.parseInt(option.db_topic_model_id));
+    		// Read data set in specified database.
+    		try {
+    			// Read data set.
+				readDataSet(topicModel.getCorpora_id(), option, option.unlabeled);
+
+				// Update option by deriving implicit parameter.
+				option.deriveImplicitSettings(topicModel, corpusFacetIDs_globalToLocal.size());
+
+				 // Load map of words in DB to IDs.
+	            this.wordsToDBIDs = dbConnector.loadWordToIDMap(option);
+
+		    	// Close database connection.
+		    	this.dbConnector.getConnection().close();
+			}
+
+    		catch (FileNotFoundException e) {
+				e.printStackTrace();
+			}
+
+    		catch (SQLException e) {
+				e.printStackTrace();
+			}
+
+    		catch (IOException e) {
+				e.printStackTrace();
+			}
+    	}
+    }
+
+
     public void setM(int M)
     {
         this.M = M;
@@ -182,12 +243,24 @@ public class LDADataset {
     }
 
     /**
-     * read a dataset from TAPAS database
-     * @return true if success and false otherwise
+     * Read corpus from TAPAS database.
+     * @param corpusID
+     * @param option
+     * @param unlabeled
+     * @return
+     * @throws FileNotFoundException
+     * @throws IOException
      */
-    public boolean readDataSet(int corpusID, DatabaseConnector dbConnector, boolean unlabeled) throws FileNotFoundException, IOException
+    public boolean readDataSet(int corpusID, LDACmdOption option, boolean unlabeled) throws FileNotFoundException, IOException
     {
-    	for (String labeledDocument : dbConnector.loadLabeledDocumentsInCorpus(corpusID)) {
+    	// Fetch corpus information record.
+    	CorpusInformation corpusInfo = dbConnector.loadLabeledDocumentsInCorpus(option, corpusID);
+    	// Copy reference to dictionaries.
+    	this.corpusFacetIDs_globalToLocal = corpusInfo.getCorpusFacetIDs_globalToLocal();
+    	this.corpusFacetIDs_localToGlobal = corpusInfo.getCorpusFacetIDs_localToGlobal();
+
+    	// Add documents.
+    	for (String labeledDocument : corpusInfo.getLabeledDocuments()) {
     		addDoc(labeledDocument, unlabeled);
     	}
         setM(docs.size());

@@ -40,16 +40,14 @@ public class Estimator
     protected Model trnModel;
     LDACmdOption option;
     private DatabaseConnector dbConnector;
-    // Map translating words to database IDs (terms_in_corpora.id).
-    private Map<String, Integer> wordsToDBIDs;
 
-    public Estimator(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data, Map<String, Integer> wordsToDBIDs) throws FileNotFoundException, IOException
+
+    public Estimator(LDACmdOption option, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
         this.option = option;
         this.dbConnector = dbConnector;
-        this.wordsToDBIDs = wordsToDBIDs;
 
-        trnModel = new Model(option, dbConnector, data, wordsToDBIDs);
+        trnModel = new Model(option, dbConnector, data);
 
         if (option.est){
             trnModel.init(true);

@@ -18,20 +18,14 @@ import jgibblda.LDACmdOption;
 public class DatabaseConnector
 {
 	private Connection conn;
-	private TopicModel topicModel;
-	private LDACmdOption option;
+
 	/**
-	 * Contains map for translation between corpus facet's (~ labels') ID in DB and the local one used for ingestion of data into LLDA.
-	 * Static, since other instances access the translation too.
+	 * Create new instance of database connector.
+	 * @param option
 	 */
-	public static Map<Integer, Integer> corpusFacetIDs_globalToLocal;
-	public static Map<Integer, Integer> corpusFacetIDs_localToGlobal;
-
-
 	public DatabaseConnector(LDACmdOption option)
     {
-		this.option = option;
-    	String url = 	"jdbc:postgresql://" +
+		String url = 	"jdbc:postgresql://" +
     					option.db_host +
     					":" + option.db_port +
     					"/" + option.db_database +
@@ -40,15 +34,11 @@ public class DatabaseConnector
 
     	try {
 			this.conn = DriverManager.getConnection(url);
-		} catch (SQLException e) {
-			System.out.println("Failed connection to db with connection URL " + url + ".");
 		}
 
-
-    	DatabaseConnector.corpusFacetIDs_globalToLocal = new HashMap<Integer, Integer>();
-    	DatabaseConnector.corpusFacetIDs_localToGlobal = new HashMap<Integer, Integer>();
-    	// Extract topic model from DB.
-    	extractTopicModel(Integer.parseInt(option.db_topic_model_id));
+    	catch (SQLException e) {
+			System.out.println("Failed connection to db with connection URL " + url + ".");
+		}
     }
 
 	/**
@@ -86,16 +76,23 @@ public class DatabaseConnector
 		return topicModel;
 	}
 
+	public Connection getConnection()
+	{
+		return this.conn;
+	}
+
 	/**
-	 * Returns all documents in corpus in requested format, i. e. ([label1, ..., labeln] document_text)
+	 * Returns all documents in corpus in requested format, i. e. ([label1, ..., labeln] document_text).
+	 * Also generates dictionaries translating between local and global (e. g. in database) indices for corpus facets.
+	 * @param option
 	 * @param corpusID
 	 * @return
 	 */
-	public String[] loadLabeledDocumentsInCorpus(int corpusID)
+	public CorpusInformation loadLabeledDocumentsInCorpus(LDACmdOption option, int corpusID)
 	{
 		PreparedStatement st;
 		ResultSet rs;
-		String[] labeledDocuments = null;
+		CorpusInformation corpusInfo = null;
 
 		try {
 			// 1. Get number of documents in corpus.
@@ -108,8 +105,8 @@ public class DatabaseConnector
 			if (rs.next()) {
 				numberOfDocuments = rs.getInt("doc_count");
 			}
-			// Initialize string array for documents with number of records.
-			labeledDocuments = new String[numberOfDocuments];
+			// Initialize container object for corpus information.
+			corpusInfo = new CorpusInformation(numberOfDocuments);
 
 
 			// 2. Load documents and corpus facets. Use the latter for generating array of local label indices.
@@ -123,10 +120,10 @@ public class DatabaseConnector
 					+ "cf.corpus_feature_value = cfid.value "
 					+ "inner join topac.corpus_features cfe on "
 					+ "	cfe.id = cf.corpus_features_id and"
+					// Don't use document IDs as facets (for summarization? There are other methods; e. g. inferring doc. if really necessary).
 					+ "	cfe.title != 'document_id'"
 					+ "WHERE "
 					+ "	d.corpora_id = ?"
-					// Don't use document IDs as facets (for summarization? There are other methods; e. g. inferring doc. if really necessary).
 					+ ""
 					+ ""
 					+ "group by "
@@ -138,6 +135,13 @@ public class DatabaseConnector
 			// 3. Prepare array of document string.
 			int localFacetIndex = 0;
 			int rowIndex = 0;
+			// Fetch collection of documents.
+			String[] labeledDocuments = corpusInfo.getLabeledDocuments();
+			// Fetch translation dictionaries.
+			Map<Integer, Integer> corpusFacetIDs_globalToLocal = corpusInfo.getCorpusFacetIDs_globalToLocal();
+			Map<Integer, Integer> corpusFacetIDs_localToGlobal = corpusInfo.getCorpusFacetIDs_localToGlobal();
+
+			// Iterate over result set (documents + labels).
 			while (rs.next()) {
 				// Translate document facet DB IDs to local ones in range [0, k - 1], where k is number of topics (equals number of facets).
 				// See https://github.com/myleott/JGibbLabeledLDA - required by library for whatever reason.
@@ -148,13 +152,13 @@ public class DatabaseConnector
 
 				// Build string representation of local facet IDs.
 				for (int corpusFacetID : corpusFacetIDsInDocument) {
-					if (!DatabaseConnector.corpusFacetIDs_globalToLocal.containsKey(corpusFacetID)) {
-						DatabaseConnector.corpusFacetIDs_globalToLocal.put(corpusFacetID, localFacetIndex);
-						DatabaseConnector.corpusFacetIDs_localToGlobal.put(localFacetIndex, corpusFacetID);
+					if (!corpusFacetIDs_globalToLocal.containsKey(corpusFacetID)) {
+						corpusFacetIDs_globalToLocal.put(corpusFacetID, localFacetIndex);
+						corpusFacetIDs_localToGlobal.put(localFacetIndex, corpusFacetID);
 						localFacetIndex++;
 					}
-
-					labeledDocumentString += String.valueOf(DatabaseConnector.corpusFacetIDs_globalToLocal.get(corpusFacetID)) + " ";
+					// Append localized facet ID to document string.
+					labeledDocumentString += String.valueOf(corpusFacetIDs_globalToLocal.get(corpusFacetID)) + " ";
 				}
 				// Remove last whitespace, add closing bracket.
 				labeledDocumentString = labeledDocumentString.substring(0, labeledDocumentString.length() - 1) + "]";
@@ -164,21 +168,26 @@ public class DatabaseConnector
 				// Add labeledDocumentString to result set.
 				labeledDocuments[rowIndex++] = labeledDocumentString;
 			}
+		}
 
-		} catch (SQLException e) {
+		catch (SQLException e) {
 			e.printStackTrace();
 		}
 
-		return labeledDocuments;
+		return corpusInfo;
 	}
 
-	public Map<String, Integer> loadWordToIDMap(int corpusID)
+	/**
+	 * Loads map translating words into IDs for table terms_in_corpora.
+	 * @param corpusID
+	 * @return
+	 */
+	public Map<String, Integer> loadWordToIDMap(LDACmdOption option)
 	{
 		PreparedStatement st;
 		ResultSet rs;
-		Map<String, Integer> wordsToIDs = new HashMap<String, Integer>();
+		Map<String, Integer> wordsToDBIDs = new HashMap<String, Integer>();
 
-		// 2. Load documents and corpus facets. Use the latter for generating array of local label indices.
 		try {
 			st = conn.prepareStatement(
 					"select "
@@ -189,11 +198,11 @@ public class DatabaseConnector
 					+ "inner join topac.terms t on "
 					+ "  t.id = tic.terms_id "
 					+ "where tic.corpora_id = ?");
-			st.setInt(1, corpusID);
+			st.setInt(1, option.corpusID);
 			rs = st.executeQuery();
 
 			while (rs.next()) {
-				wordsToIDs.put(rs.getString("term"), rs.getInt("id"));
+				wordsToDBIDs.put(rs.getString("term"), rs.getInt("id"));
 			}
 		}
 
@@ -201,6 +210,6 @@ public class DatabaseConnector
 			e.printStackTrace();
 		}
 
-		return wordsToIDs;
+		return wordsToDBIDs;
 	}
 }
