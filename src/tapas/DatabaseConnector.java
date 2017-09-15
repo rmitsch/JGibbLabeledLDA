@@ -1,7 +1,10 @@
 package tapas;
 
+import java.io.BufferedWriter;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.sql.Array;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -12,8 +15,12 @@ import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.zip.GZIPOutputStream;
+
+import com.sun.webkit.graphics.Ref;
 
 import jgibblda.LDACmdOption;
+import jgibblda.LDADataset;
 
 public class DatabaseConnector
 {
@@ -53,6 +60,7 @@ public class DatabaseConnector
 		try {
 			PreparedStatement st = conn.prepareStatement("SELECT * FROM topac.topic_models WHERE id = ?");
 			st.setInt(1, topicModelID);
+
 			ResultSet rs = st.executeQuery();
 
 			// Read topic model.
@@ -63,8 +71,7 @@ public class DatabaseConnector
 			    								rs.getDouble("eta"),
 			    								rs.getInt("kappa"),
 			    								rs.getInt("n_iterations"),
-			    								rs.getInt("corpora_id"),
-			    								rs.getInt("corpus_features_id"));
+			    								rs.getInt("corpora_id"));
 			}
 
 			rs.close();
@@ -211,5 +218,177 @@ public class DatabaseConnector
 		}
 
 		return wordsToDBIDs;
+	}
+
+	/**
+	 * Stores topic entries in DB. Used key in provided map to refer to facets in DB.
+	 * Topics' sequence number can be inferred - lookup with algorithm works using facet ID translation.
+	 * @param corpusFacetIDs_globalToLocal
+	 * @param option
+	 * @return facetDBIDs_to_topicDBIDs Map linking DB IDs of facets to DB IDs of topics.
+	 */
+	public Map<Integer, Integer> saveTopicsForFacets(Map<Integer, Integer> corpusFacetIDs_globalToLocal, LDACmdOption option)
+	{
+		PreparedStatement st;
+		ResultSet rs;
+		Map<Integer, Integer> facetDBIDs_to_topicDBIDs = new HashMap<Integer, Integer>();
+
+		try {
+			// Make sure autocommit is disabled.
+			conn.setAutoCommit(false);
+
+			// Prepare statement for insertion of topics.
+			st =  conn.prepareStatement(
+					"insert into topac.topics ("
+					+ "	sequence_number, "
+					+ " title, "
+					+ " topic_models_id, "
+					+ " quality, "
+					+ "	coordinates, "
+					+ "	coherence, "
+					+ "	corpus_facets_id"
+					+ ") "
+					+ "values (?, ?, ?, ?, ? ,?, ?)" + "",
+					// Make sure we fetch the returned topic IDs.
+					new String[] {"id", "corpus_facets_id"}
+			);
+
+			// Iterate over map of facet IDs. Key is global/DB ID, value is corresponding local index.
+			// Create one topic for each facet (since this is the result of a LLDA computation).
+			int sequence_number = 0;
+			for (Map.Entry<Integer, Integer> facetIDs : corpusFacetIDs_globalToLocal.entrySet()) {
+				st.setInt(1, sequence_number++);
+				st.setString(2, "");
+				st.setInt(3, Integer.parseInt(option.db_topic_model_id));
+				st.setFloat(4, -1);
+
+				String[] coordinates = { "-1" };
+				st.setArray(5, conn.createArrayOf("FLOAT", coordinates));
+
+				st.setFloat(6, -1);
+				st.setInt(7, facetIDs.getKey());
+
+				// Add topic to  batch.
+				st.addBatch();
+			}
+			// Execute bulk insert.
+			st.executeBatch();
+			conn.commit();
+			// Fetch generated keys.
+			rs = st.getGeneratedKeys();
+
+			// Generate map for translating facet DB ID to topic DB ID.
+			while (rs.next()) {
+				facetDBIDs_to_topicDBIDs.put(rs.getInt("corpus_facets_id"), rs.getInt("id"));
+			}
+
+			st.close();
+		}
+
+		catch (SQLException e) {
+			e.printStackTrace();
+		}
+
+		return facetDBIDs_to_topicDBIDs;
+	}
+
+
+	/**
+	 * Save word-in-topic probabilities.
+	 * @param K
+	 * @param V
+	 * @param data
+	 * @param phi
+	 * @param facetDBIDs_to_topicDBIDs
+	 */
+	public void saveWordInTopicsProbabilities(	int K,
+												int V,
+												LDADataset data,
+												double[][] phi,
+												Map<Integer, Integer> facetDBIDs_to_topicDBIDs)
+	{
+		PreparedStatement st;
+		ResultSet rs;
+
+		try {
+			// Make sure autocommit is disabled.
+			conn.setAutoCommit(false);
+
+			// Drop foreign key constraints temporarily for speedup (guaranteed by earlier loading from DB, meanwhile no write actions
+			// since this is a single-user system.
+			st = conn.prepareStatement("alter table topac.terms_in_topics drop constraint terms_in_topics_terms_in_corpora");
+			st.execute();
+			// Disable synchronous commits for transactions.
+			st = conn.prepareStatement("set synchronous_commit to off");
+			st.execute();
+			conn.commit();
+
+			// Prepare statement for insertion of topics.
+			st =  conn.prepareStatement(
+					"insert into topac.terms_in_topics ("
+					+ "	topics_id, "
+					+ " terms_in_corpora_id, "
+					+ " probability "
+					+ ") "
+					+ "values (?, ?, ?)"
+			);
+
+			// Define batch size to reduce memory footprint.
+			final int batchSize = 5000000;
+			int count = 0;
+			System.out.println(V + ", " + K + ", count = " + (K * V));
+
+			// Iterate over topics.
+			for (int i = 0; i < K; i++) {
+				System.out.println((float)i / K * 100);
+				// Fetch corresponding ID of facet in DB.
+				int facetID = data.corpusFacetIDs_localToGlobal.get(i);
+				// Fetch ID of corresponding topic in DB.
+				int topicID = facetDBIDs_to_topicDBIDs.get(facetID);
+
+				st.setInt(1, topicID);
+
+				// Iterate over words.
+	            for (int j = 0; j < V; j++) {
+	            	// Look up word, then look up terms_in_corpora_id for word.
+	            	st.setInt(2, data.wordsToDBIDs.get(data.localDict.getWord(j)));
+	            	st.setFloat(3, (float)phi[i][j]);
+
+		            // Add to batch.
+		            st.addBatch();
+
+		            // Execute batch if batch size is reached.
+		            if(++count % batchSize == 0) {
+		            	System.out.println("Executing batch");
+		            	st.executeBatch();
+		            	conn.commit();
+		            }
+	            }
+	        }
+
+			// Insert remaining terms_in_topics.
+			st.executeBatch();
+			conn.commit();
+
+			// Reintroduce foreign key constraint.
+			st = conn.prepareStatement(
+					"ALTER TABLE topac.terms_in_topics ADD CONSTRAINT terms_in_topics_terms_in_corpora "
+				    + "FOREIGN KEY (terms_in_corpora_id) "
+				    + "REFERENCES topac.terms_in_corpora (id) "
+				    + "NOT DEFERRABLE "
+				    + "INITIALLY IMMEDIATE");
+			st.execute();
+			// Disable synchronous commits for transactions.
+			st = conn.prepareStatement("set synchronous_commit to on");
+			st.execute();
+			conn.commit();
+
+			st.close();
+		}
+
+		catch (SQLException e) {
+			e.printStackTrace();
+		}
+
 	}
 }

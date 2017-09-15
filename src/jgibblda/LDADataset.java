@@ -91,6 +91,7 @@ public class LDADataset {
     	if (readCorpus) {
     		// Fetch topic model.
         	TopicModel topicModel = dbConnector.extractTopicModel(Integer.parseInt(option.db_topic_model_id));
+
     		// Read data set in specified database.
     		try {
     			// Read data set.
@@ -272,4 +273,15 @@ public class LDADataset {
 
         return true;
     }
+
+
+	public Map<Integer, Integer> getCorpusFacetIDs_globalToLocal()
+	{
+		return corpusFacetIDs_globalToLocal;
+	}
+
+	public Map<Integer, Integer> getCorpusFacetIDs_localToGlobal()
+	{
+		return corpusFacetIDs_localToGlobal;
+	}
 }

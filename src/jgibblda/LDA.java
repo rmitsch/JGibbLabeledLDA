@@ -30,6 +30,9 @@ package jgibblda;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Map;
 import java.util.Scanner;
 
@@ -42,6 +45,13 @@ public class LDA
 {
     public static void main(String args[])
     {
+//    	CONTINUE:
+//		- drop foreign keys before bulk import (Ref.class time: ~ 10 mins))
+//		- import other topic data
+//		- introduce multithreading
+//		- incorporate in python part
+//		- rewrite python part (facets, calling java etc.)
+
         LDACmdOption option = new LDACmdOption();
         CmdLineParser parser = new CmdLineParser(option);
 
@@ -56,19 +66,15 @@ public class LDA
             // Build connection to database.
             DatabaseConnector dbConnector = new DatabaseConnector(option);
 
-//            REFACTORING: Create Corpus (or similar) class containing index translation maps etc.
-//            Use that as container for arguments.
-//            Alt.: Add to LDADataset (preferred!).
-
             // Load dataset.
-            System.out.println(option.alpha);
             LDADataset data = new LDADataset(option, true);
-            System.out.println(option.alpha);
-            System.exit(0);
 
             if (option.est || option.estc){
                 Estimator estimator = new Estimator(option, dbConnector, data);
                 estimator.estimate();
+                DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+            	Date date = new Date();
+            	System.out.println(dateFormat.format(date)); //2016/11/16 12:08:43
             }
          // Disregard inferencer for now - not tested, hence not supported unless it becomes necessary for TAPAS.
 //            else if (option.inf){

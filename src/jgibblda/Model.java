@@ -104,6 +104,9 @@ public class Model {
     // Connector to database.
     private DatabaseConnector dbConnector;
 
+    // Configuration object.
+    private LDACmdOption option;
+
     //---------------------------------------------------------------
     //	Constructors
     //---------------------------------------------------------------
@@ -115,9 +118,8 @@ public class Model {
 
     public Model(LDACmdOption option, Model trnModel, DatabaseConnector dbConnector, LDADataset data) throws FileNotFoundException, IOException
     {
-    	this.dbConnector = dbConnector;
-
-        // initialize dataset
+        this.dbConnector = dbConnector;
+        this.option = option;
         this.data = data;
 
         // process trnModel (if given) - for inference
@@ -169,7 +171,7 @@ public class Model {
             V = data.V;
             z = new TIntArrayList[M];
         } else {
-        	// Note: This branch is only used for inference, not for estimation - hence not necessary if only estimation is to be performed.
+            // Note: This branch is only used for inference, not for estimation - hence not necessary if only estimation is to be performed.
             if (!loadModel()) {
                 System.out.println("Fail to load word-topic assignment file of the model!");
                 return false;
@@ -216,8 +218,6 @@ public class Model {
         }
 
         theta = new double[M][K];
-        System.out.println(K * V * 8 / 1024 / 1024);
-        System.out.println(M * K * 8 / 1024 / 1024);
         phi = new double[K][V];
 
         return true;
@@ -362,25 +362,32 @@ public class Model {
 
     public boolean saveModel(String modelPrefix)
     {
-    	// 1. Iterate over theta. Columns: topics, rows: documents.
-    	// Alt.: Iterate over dictionary.
-    	// Topic IDs should be able to be translated using the local-to-global dictionary produced upstream (DBConnector?).
-    	// That way, topics can associated with the corresponding corpus_facets.
-    	// Possible approach: Sample first row matrix; construct topics (representation: bean or dict or DB ID (!)...) with the
-    	// corresponding properties (facet ID etc.). Insert topics in DB.
-    	// 2. Iterate over theta, insert topic-doc probabilities in DB (using existing translation dictionaries and topic IDs).
-    	// 3. Iterate over phi, insert word-topic assignments.
-    	// 4. Commit, close transaction.
-    	// After that:
-    	//	- Start refactoring and introducing multi-threading.
-    	//	- Update python code - remove unnecessary steps, call and monitor LLDA execution.
-    	//	- Small improvements in DB (replace topac with tapas, connection between facets and document values etc.).
-    	//	- UI prototype.
+        // 1. Iterate over theta. Columns: topics, rows: documents.
+        // Alt.: Iterate over dictionary.
+        // Topic IDs should be able to be translated using the local-to-global dictionary produced upstream (DBConnector?).
+        // That way, topics can associated with the corresponding corpus_facets.
+        // Possible approach: Sample first row matrix; construct topics (representation: bean or dict or DB ID (!)...) with the
+        // corresponding properties (facet ID etc.). Insert topics in DB.
+        // 2. Iterate over theta, insert topic-doc probabilities in DB (using existing translation dictionaries and topic IDs).
+        // 3. Iterate over phi, insert word-topic assignments.
+        // 4. Commit, close transaction.
+        // After that:
+        //	- Start refactoring and introducing multi-threading.
+        //	- Update python code - remove unnecessary steps, call and monitor LLDA execution.
+        //	- Small improvements in DB (replace topac with tapas, connection between facets and document values etc.).
+        //	- UI prototype.
+
+    	// 1. Store topics in DB, get map translating facet DB IDs to topic DB IDs..
+    	Map<Integer, Integer> facetDBIDs_to_topicDBIDs = dbConnector.saveTopicsForFacets(this.data.getCorpusFacetIDs_globalToLocal(), this.option);
 
 
+    	// 2. Store word-in-topic probabilities.
+    	dbConnector.saveWordInTopicsProbabilities(K, V, data, phi, facetDBIDs_to_topicDBIDs);
 
-    	this.dir = "/home/raphael/";
-    	this.modelName = "blub";
+    	// 3. Store topic-in-document probabilities.
+
+    	// 4. Store term-to-topic associations.
+
 //        if (!saveModelTAssign(dir + File.separator + modelPrefix + modelName + tassignSuffix)) {
 //            return false;
 //        }
@@ -389,9 +396,9 @@ public class Model {
 //            return false;
 //        }
 //
-        if (!saveModelTheta(dir + File.separator + modelPrefix + modelName + thetaSuffix)) {
-            return false;
-        }
+//        if (!saveModelTheta(dir + File.separator + modelPrefix + modelName + thetaSuffix)) {
+//            return false;
+//        }
 //
 //        if (!saveModelPhi(dir + File.separator + modelPrefix + modelName + phiSuffix)) {
 //            return false;
@@ -433,37 +440,6 @@ public class Model {
         }
 
         System.out.println("Saving modelTAssign");
-        return true;
-    }
-
-    /**
-     * Save word-topic assignments for this model in DB.
-     */
-    public boolean saveModelTAssign() {
-        int i, j;
-
-//        try{
-//            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
-//                        new GZIPOutputStream(
-//                            new FileOutputStream(filename)), "UTF-8"));
-//
-//            //write docs with topic assignments for words
-//            for (i = 0; i < data.M; i++) {
-//                for (j = 0; j < data.docs.get(i).length; ++j) {
-//                    writer.write(data.docs.get(i).words[j] + ":" + z[i].get(j) + " ");
-//                }
-//                writer.write("\n");
-//            }
-//
-//            writer.close();
-//        }
-//        catch (Exception e) {
-//            System.out.println("Error while saving model tassign: " + e.getMessage());
-//            e.printStackTrace();
-//            return false;
-//        }
-//
-//        System.out.println("Saving modelTAssign");
         return true;
     }
 
@@ -670,7 +646,7 @@ public class Model {
      */
     protected boolean readTAssignFile(String tassignFile)
     {
-    	return false;
+        return false;
 //        try {
 //            int i,j;
 //            BufferedReader reader = new BufferedReader(new InputStreamReader(

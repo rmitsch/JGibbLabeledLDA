@@ -12,7 +12,7 @@ public class TopicModel
 	private int corpora_id;
 	private int corpus_features_id;
 
-	public TopicModel(int ID, double alpha, double eta, int kappa, int n_iterations, int corpora_id, int corpus_features_id)
+	public TopicModel(int ID, double alpha, double eta, int kappa, int n_iterations, int corpora_id)
     {
 		this.ID = ID;
 		this.alpha = alpha;
@@ -20,7 +20,6 @@ public class TopicModel
 		this.kappa = kappa;
 		this.n_iterations = n_iterations;
 		this.corpora_id = corpora_id;
-		this.corpus_features_id = corpus_features_id;
     }
 
 	public int getID() {
