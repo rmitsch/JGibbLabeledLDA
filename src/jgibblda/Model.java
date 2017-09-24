@@ -377,14 +377,16 @@ public class Model {
         //	- Small improvements in DB (replace topac with tapas, connection between facets and document values etc.).
         //	- UI prototype.
 
+    	final int topicModelID = Integer.parseInt(option.db_topic_model_id);
+
     	// 1. Store topics in DB, get map translating facet DB IDs to topic DB IDs..
     	Map<Integer, Integer> facetDBIDs_to_topicDBIDs = dbConnector.saveTopicsForFacets(this.data.getCorpusFacetIDs_globalToLocal(), this.option);
 
-
     	// 2. Store word-in-topic probabilities.
-    	dbConnector.saveWordInTopicsProbabilities(K, V, data, phi, facetDBIDs_to_topicDBIDs);
+//    	dbConnector.saveWordInTopicsProbabilities(K, V, data, topicModelID, phi, facetDBIDs_to_topicDBIDs);
 
     	// 3. Store topic-in-document probabilities.
+    	dbConnector.saveTopicInDocumentProbabilities(K, M, data, topicModelID, theta, facetDBIDs_to_topicDBIDs);
 
     	// 4. Store term-to-topic associations.
 

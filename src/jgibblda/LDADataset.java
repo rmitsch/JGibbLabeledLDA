@@ -71,6 +71,10 @@ public class LDADataset {
 	 */
 	public Map<Integer, Integer> corpusFacetIDs_globalToLocal;
 	public Map<Integer, Integer> corpusFacetIDs_localToGlobal;
+	/**
+	 * Documents' locally used sequence index/ID -> documents' DB ID.
+	 */
+	public Map<Integer, Integer> documentIDs_localToGlobal;
 
 	/**
 	 * Map for translating words to IDs (in DB table for terms_in_corpora).
@@ -257,8 +261,9 @@ public class LDADataset {
     	// Fetch corpus information record.
     	CorpusInformation corpusInfo = dbConnector.loadLabeledDocumentsInCorpus(option, corpusID);
     	// Copy reference to dictionaries.
-    	this.corpusFacetIDs_globalToLocal = corpusInfo.getCorpusFacetIDs_globalToLocal();
-    	this.corpusFacetIDs_localToGlobal = corpusInfo.getCorpusFacetIDs_localToGlobal();
+    	this.corpusFacetIDs_globalToLocal 	= corpusInfo.getCorpusFacetIDs_globalToLocal();
+    	this.corpusFacetIDs_localToGlobal 	= corpusInfo.getCorpusFacetIDs_localToGlobal();
+    	this.documentIDs_localToGlobal		= corpusInfo.getDocumentIDs_localToGlobal();
 
     	// Add documents.
     	for (String labeledDocument : corpusInfo.getLabeledDocuments()) {

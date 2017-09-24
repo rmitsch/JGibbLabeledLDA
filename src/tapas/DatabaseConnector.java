@@ -122,23 +122,26 @@ public class DatabaseConnector
 
 			// 2. Load documents and corpus facets. Use the latter for generating array of local label indices.
 			st = conn.prepareStatement(
-					"SELECT d.id, d.refined_text, array_agg(cf.id) corpus_facet_ids_in_document "
-					+ "FROM topac.documents d "
+					"SELECT "
+					+ "	d.id, "
+					+ "	d.refined_text, "
+					+ "	array_agg(cf.id) corpus_facet_ids_in_document "
+					+ "FROM "
+					+ "	topac.documents d "
 					+ "inner join topac.corpus_features_in_documents cfid on "
 					+ "	cfid.documents_id = d.id "
 					+ "inner join topac.corpus_facets cf on "
-					+ "cf.corpus_features_id = cfid.corpus_features_id and "
-					+ "cf.corpus_feature_value = cfid.value "
+					+ "	cf.corpus_features_id = cfid.corpus_features_id and "
+					+ "	cf.corpus_feature_value = cfid.value "
 					+ "inner join topac.corpus_features cfe on "
 					+ "	cfe.id = cf.corpus_features_id and"
-					// Don't use document IDs as facets (for summarization? There are other methods; e. g. inferring doc. if really necessary).
+					// Don't use document IDs as facets (for summarization? There are other methods; e. g. inferring doc,
+					// if really necessary).
 					+ "	cfe.title != 'document_id'"
 					+ "WHERE "
 					+ "	d.corpora_id = ?"
-					+ ""
-					+ ""
 					+ "group by "
-					+ "d.id, d.refined_text");
+					+ "	d.id, d.refined_text ");
 
 			st.setInt(1, corpusID);
 			rs = st.executeQuery();
@@ -149,8 +152,9 @@ public class DatabaseConnector
 			// Fetch collection of documents.
 			String[] labeledDocuments = corpusInfo.getLabeledDocuments();
 			// Fetch translation dictionaries.
-			Map<Integer, Integer> corpusFacetIDs_globalToLocal = corpusInfo.getCorpusFacetIDs_globalToLocal();
-			Map<Integer, Integer> corpusFacetIDs_localToGlobal = corpusInfo.getCorpusFacetIDs_localToGlobal();
+			Map<Integer, Integer> corpusFacetIDs_globalToLocal 	= corpusInfo.getCorpusFacetIDs_globalToLocal();
+			Map<Integer, Integer> corpusFacetIDs_localToGlobal 	= corpusInfo.getCorpusFacetIDs_localToGlobal();
+			Map<Integer, Integer> documentIDs_localToGlobal		= corpusInfo.getDocumentIDs_localToGlobal();
 
 			// Iterate over result set (documents + labels).
 			while (rs.next()) {
@@ -175,6 +179,9 @@ public class DatabaseConnector
 				labeledDocumentString = labeledDocumentString.substring(0, labeledDocumentString.length() - 1) + "]";
 				// Add document to labeledDocumentString.
 				labeledDocumentString += " " + rs.getString("refined_text");
+
+				// Add correspondence between sequence index/ID used by LLDA implementation and DB ID to map.
+				documentIDs_localToGlobal.put(rowIndex, rs.getInt("id"));
 
 				// Add labeledDocumentString to result set.
 				labeledDocuments[rowIndex++] = labeledDocumentString;
@@ -296,90 +303,194 @@ public class DatabaseConnector
 		return facetDBIDs_to_topicDBIDs;
 	}
 
-
 	/**
-	 * Save word-in-topic probabilities.
-	 * @param K
-	 * @param V
-	 * @param data
-	 * @param phi
-	 * @param facetDBIDs_to_topicDBIDs
+	 * Auxiliary function used for executing SQL statements, including boilerplate code (closing statements etc.).
+	 * Purely for convenience. Don't use for many statements if performance is critical.
+	 * @param sql SQL command to execute.
+	 * @returns status
 	 */
-	public void saveWordInTopicsProbabilities(	int K,
-												int V,
-												LDADataset data,
-												double[][] phi,
-												Map<Integer, Integer> facetDBIDs_to_topicDBIDs)
+	private boolean executeSQL(final String sql)
 	{
 		PreparedStatement st;
-		ResultSet rs;
+		boolean status = false;
 
 		try {
-			// Make sure autocommit is disabled.
-			conn.setAutoCommit(false);
-
-			// Drop foreign key constraints temporarily for speedup (guaranteed by earlier loading from DB, meanwhile no write actions
-			// since this is a single-user system.
-			st = conn.prepareStatement("alter table topac.terms_in_topics drop constraint terms_in_topics_terms_in_corpora");
-			st.execute();
-			// Disable synchronous commits for transactions.
-			st = conn.prepareStatement("set synchronous_commit to off");
-			st.execute();
-			conn.commit();
-
-			// Define batch size to reduce memory footprint.
-			final int batchSize = 5000000;
-			int count = 0;
-
-			CopyManager copyManager = new CopyManager((BaseConnection) conn);
-			CopyIn copyIn = copyManager.copyIn("COPY topac.terms_in_topics FROM STDIN WITH DELIMITER ','");
-
-			// Iterate over topics.
-			for (int i = 0; i < K; i++) {
-				// Fetch corresponding ID of facet in DB.
-				int facetID = data.corpusFacetIDs_localToGlobal.get(i);
-				// Fetch ID of corresponding topic in DB.
-				int topicID = facetDBIDs_to_topicDBIDs.get(facetID);
-
-				// Iterate over words.
-	            for (int j = 0; j < V; j++) {
-	            	byte[] bytesToAppend = (topicID + "," + data.wordsToDBIDs.get(data.localDict.getWord(j)) + "," + (float)phi[i][j] + "\n").getBytes();
-	                copyIn.writeToCopy(bytesToAppend, 0, bytesToAppend.length);
-
-		            // Execute batch if batch size is reached.
-		            if(++count % batchSize == 0) {
-		            	System.out.println("Executing batch");
-		            	copyIn.endCopy();
-		            	conn.commit();
-		            	// Prepare copyIn instance for next batch.
-		            	copyIn = copyManager.copyIn("COPY topac.terms_in_topics FROM STDIN WITH DELIMITER ','");
-		            }
-	            }
-	        }
-
-			// Insert remaining terms_in_topics.
-			st.executeBatch();
-			conn.commit();
-
-			// Reintroduce foreign key constraint.
-			st = conn.prepareStatement(
-					"ALTER TABLE topac.terms_in_topics ADD CONSTRAINT terms_in_topics_terms_in_corpora "
-				    + "FOREIGN KEY (terms_in_corpora_id) "
-				    + "REFERENCES topac.terms_in_corpora (id) "
-				    + "NOT DEFERRABLE "
-				    + "INITIALLY IMMEDIATE");
-			st.execute();
-			// Disable synchronous commits for transactions.
-			st = conn.prepareStatement("set synchronous_commit to on");
-			st.execute();
-			conn.commit();
-
+			st = conn.prepareStatement(sql);
+			status = st.execute();
 			st.close();
 		}
 
 		catch (SQLException e) {
 			e.printStackTrace();
 		}
+
+		return status;
+	}
+
+
+	/**
+	 * Save word-in-topic probabilities.
+	 * @param K Number of topics/facets/labels.
+	 * @param V Number of words in vocabulary.
+	 * @param data Data set containing corpus and maps for translating between locally and globally used IDs.
+	 * @param phi Matrix with word-in-topic probabilities.
+	 * @param facetDBIDs_to_topicDBIDs Map translating between DB IDs of facets and corresponding topics.
+	 */
+	public void saveWordInTopicsProbabilities(	int K,
+												int V,
+												LDADataset data,
+												final int topicModelID,
+												double[][] phi,
+												Map<Integer, Integer> facetDBIDs_to_topicDBIDs)
+	{
+		// Define batch size to limit memory footprint.
+		final int batchSize = 5000000;
+		int count = 0;
+
+		try {
+			conn.setAutoCommit(true);
+
+			// Drop foreign key constraints temporarily for speedup (guaranteed by earlier loading from DB, meanwhile no write actions
+			// since this is a single-user system.
+			executeSQL("alter table topac.terms_in_topics drop constraint terms_in_topics_terms_in_corpora");
+			// Disable synchronous commits for transactions.
+			executeSQL("set synchronous_commit to off");
+
+			// Initialize instances of classes necessary for using copy command.
+			CopyManager copyManager = new CopyManager((BaseConnection) conn);
+			final String copyCommand = "COPY " + "topac.terms_in_topics" + " FROM STDIN WITH DELIMITER ','";
+			CopyIn copyIn = copyManager.copyIn(copyCommand);
+
+			// Iterate over topics.
+			for (int i = 0; i < K; i++) {
+				// Fetch corresponding ID of facet in DB.
+				final int facetID = data.corpusFacetIDs_localToGlobal.get(i);
+				// Fetch ID of topic corresponding to facet in DB.
+				final int topicID = facetDBIDs_to_topicDBIDs.get(facetID);
+
+				// Iterate over words.
+	            for (int j = 0; j < V / 10; j++) {
+	            	// Create new row, cast to bytes, append bytes to CopyIn instance.
+	            	final byte[] bytesToAppend = (topicID + "," + data.wordsToDBIDs.get(data.localDict.getWord(j)) + "," + (float)phi[i][j] + "\n").getBytes();
+	                copyIn.writeToCopy(bytesToAppend, 0, bytesToAppend.length);
+
+		            // Execute batch if batch size is reached.
+		            if(++count % batchSize == 0) {
+		            	copyIn.endCopy();
+		            	// Prepare copyIn instance for next batch.
+		            	copyIn = copyManager.copyIn(copyCommand);
+		            }
+	            }
+	        }
+
+			// Insert remaining terms_in_topics.
+			copyIn.endCopy();
+
+			// Reintroduce foreign key constraint.
+			executeSQL(
+					"ALTER TABLE topac.terms_in_topics ADD CONSTRAINT terms_in_topics_terms_in_corpora "
+				    + "FOREIGN KEY (terms_in_corpora_id) "
+				    + "REFERENCES topac.terms_in_corpora (id) "
+				    + "NOT DEFERRABLE "
+				    + "INITIALLY IMMEDIATE");
+			// Disable synchronous commits for transactions.
+			executeSQL("set synchronous_commit to on");
+
+			// Analyze table.
+			executeSQL("analyze topac.terms_in_topics");
+		}
+
+		catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 *Save topic-in-document probabilities.
+	 * @param K Number of topics/facets/labels.
+	 * @param M Number of documents in corpus..
+	 * @param data Data set containing corpus and maps for translating between locally and globally used IDs.
+	 * @param theta Matrix with topic-in-document probabilities.
+	 * @param facetDBIDs_to_topicDBIDs Map translating between DB IDs of facets and corresponding topics.
+	 */
+	public void saveTopicInDocumentProbabilities(	int K,
+													int M,
+													LDADataset data,
+													final int topicModelID,
+													double[][] theta,
+													Map<Integer, Integer> facetDBIDs_to_topicDBIDs)
+	{
+		// Define batch size to limit memory footprint.
+		final int batchSize = 5000000;
+		int count = 0;
+
+		try {
+			conn.setAutoCommit(true);
+
+			// Drop foreign key constraints temporarily for speedup (guaranteed by earlier loading from DB, meanwhile no write actions
+			// since this is a single-user system.
+			executeSQL("alter table topac.topics_in_documents drop constraint topics_in_document_documents");
+			executeSQL("alter table topac.topics_in_documents drop constraint topics_in_document_topics");
+			// Disable synchronous commits for transactions.
+			executeSQL("set synchronous_commit to off");
+
+			// Initialize instances of classes necessary for using copy command.
+			CopyManager copyManager = new CopyManager((BaseConnection) conn);
+			final String copyCommand = "COPY " + "topac.topics_in_documents" + " FROM STDIN WITH DELIMITER ','";
+			CopyIn copyIn = copyManager.copyIn(copyCommand);
+
+			// Line is document, column is topic.
+			for (int i = 0; i < M; i++) {
+				// Fetch document's DB ID.
+				final int documentID 	= data.documentIDs_localToGlobal.get(i);
+
+	            for (int j = 0; j < K; j++) {
+					// Fetch corresponding ID of facet in DB.
+					final int facetID 		= data.corpusFacetIDs_localToGlobal.get(j);
+					// Fetch ID of topic corresponding to facet in DB.
+					final int topicID 		= facetDBIDs_to_topicDBIDs.get(facetID);
+
+	            	// Create new row, cast to bytes, append bytes to CopyIn instance.
+	            	final byte[] bytesToAppend = (documentID + "," + topicID + "," + (float)theta[i][j] + "\n").getBytes();
+	                copyIn.writeToCopy(bytesToAppend, 0, bytesToAppend.length);
+
+		            // Execute batch if batch size is reached.
+		            if(++count % batchSize == 0) {
+		            	copyIn.endCopy();
+		            	// Prepare copyIn instance for next batch.
+		            	copyIn = copyManager.copyIn(copyCommand);
+		            }
+	            }
+	        }
+
+			// Insert remaining terms_in_topics.
+			copyIn.endCopy();
+
+			// Reintroduce foreign key constraints.
+			executeSQL(
+					"ALTER TABLE topac.topics_in_documents ADD CONSTRAINT topics_in_document_documents "
+				    + "FOREIGN KEY (documents_id) "
+				    + "REFERENCES topac.documents (id) "
+				    + "NOT DEFERRABLE "
+				    + "INITIALLY IMMEDIATE");
+			executeSQL(
+					"ALTER TABLE topac.topics_in_documents ADD CONSTRAINT topics_in_document_topics "
+				    + "FOREIGN KEY (topics_id) "
+				    + "REFERENCES topac.topics (id) "
+				    + "NOT DEFERRABLE "
+				    + "INITIALLY IMMEDIATE");
+
+			// Disable synchronous commits for transactions.
+			executeSQL("set synchronous_commit to on");
+
+			// Analyze table.
+			executeSQL("analyze topac.topics_in_documents");
+		}
+
+		catch (SQLException e) {
+			e.printStackTrace();
+		}
+
 
 	}
 }

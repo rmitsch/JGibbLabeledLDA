@@ -70,11 +70,12 @@ public class LDA
             LDADataset data = new LDADataset(option, true);
 
             if (option.est || option.estc){
+            	Date start = new Date();
                 Estimator estimator = new Estimator(option, dbConnector, data);
                 estimator.estimate();
                 DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-            	Date date = new Date();
-            	System.out.println(dateFormat.format(date)); //2016/11/16 12:08:43
+
+            	System.out.println(((new Date().getTime() - start.getTime()) / 1000) + "s");
             }
          // Disregard inferencer for now - not tested, hence not supported unless it becomes necessary for TAPAS.
 //            else if (option.inf){
